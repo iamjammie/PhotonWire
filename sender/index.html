@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GlassWire Sender — air-gapped side</title>
+<style>
+  :root {
+    --bg: #0b0e14; --panel: #141923; --line: #232b3a; --fg: #e6e9ef; --muted: #8b94a7;
+    --accent: #ffb547; --ok: #3ddc84; --font: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 system-ui, sans-serif; }
+  header { display: flex; align-items: baseline; gap: 14px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0; font-size: 16px; letter-spacing: .04em; text-transform: uppercase; }
+  header .sub { color: var(--muted); font-family: var(--font); font-size: 12px; }
+  main { display: grid; grid-template-columns: 340px 1fr; min-height: calc(100vh - 49px); }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+  aside { padding: 18px 20px; border-right: 1px solid var(--line); background: var(--panel); }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+  .field input[type=text], .field select, .field textarea, .field input[type=number] {
+    width: 100%; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font: inherit;
+  }
+  .field textarea { font-family: var(--font); font-size: 12px; min-height: 72px; resize: vertical; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .range { display: flex; align-items: center; gap: 10px; }
+  .range input { flex: 1; accent-color: var(--accent); }
+  .range output { font-family: var(--font); min-width: 54px; text-align: right; }
+  .drop { border: 1px dashed #3a4356; border-radius: 8px; padding: 14px; text-align: center; color: var(--muted); cursor: pointer; }
+  .drop.hover { border-color: var(--accent); color: var(--fg); }
+  .drop input { display: none; }
+  button { background: var(--accent); color: #1a1200; border: 0; border-radius: 6px; padding: 10px 14px; font: inherit; font-weight: 600; cursor: pointer; }
+  button.secondary { background: transparent; color: var(--fg); border: 1px solid var(--line); }
+  button:disabled { opacity: .45; cursor: default; }
+  .actions { display: flex; gap: 8px; margin-top: 8px; }
+  .stats { margin-top: 16px; font-family: var(--font); font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 12px; }
+  .stats div { display: flex; justify-content: space-between; padding: 2px 0; }
+  .stats b { color: var(--fg); font-weight: 500; }
+  section.stage { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; gap: 14px; }
+  .qrwrap { background: #fff; padding: 0; border-radius: 10px; box-shadow: 0 0 0 1px var(--line), 0 30px 80px rgba(0,0,0,.5); line-height: 0; }
+  canvas { display: block; image-rendering: pixelated; width: min(78vh, 92vw, 760px); height: auto; }
+  .progress { width: min(78vh, 92vw, 760px); height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+  .progress i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .1s linear; }
+  .caption { font-family: var(--font); color: var(--muted); font-size: 12px; display: flex; gap: 18px; }
+  .caption b { color: var(--fg); font-weight: 500; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 10px; }
+  kbd { font-family: var(--font); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>GlassWire <span style="opacity:.55;font-weight:400">Sender</span></h1>
+  <span class="sub">air-gapped · no network · frames loop until you stop</span>
+</header>
+<main>
+  <aside>
+    <div class="field">
+      <label>Payload</label>
+      <div class="drop" id="drop">
+        <input type="file" id="file">
+        <span id="dropText">Click or drop a file here</span>
+      </div>
+    </div>
+    <div class="field">
+      <label>…or paste text</label>
+      <textarea id="text" placeholder="Anything typed here is sent as payload.txt (ignored if a file is chosen)"></textarea>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>Error correction</label>
+        <select id="ecl">
+          <option value="L" selected>L — 7 % (densest)</option>
+          <option value="M">M — 15 %</option>
+          <option value="Q">Q — 25 %</option>
+          <option value="H">H — 30 %</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>QR version (density)</label>
+        <select id="version">
+          <option value="8">8 — 49 modules</option>
+          <option value="10">10 — 57 modules</option>
+          <option value="12" selected>12 — 65 modules</option>
+          <option value="15">15 — 77 modules</option>
+          <option value="18">18 — 89 modules</option>
+          <option value="20">20 — 97 modules</option>
+          <option value="25">25 — 117 modules</option>
+          <option value="30">30 — 137 modules</option>
+          <option value="40">40 — 177 modules</option>
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label>Frame rate</label>
+      <div class="range"><input type="range" id="fps" min="1" max="20" value="6"><output id="fpsOut">6 fps</output></div>
+    </div>
+    <div class="field">
+      <label>Header every N frames</label>
+      <div class="range"><input type="range" id="hdrEvery" min="2" max="30" value="8"><output id="hdrOut">8</output></div>
+    </div>
+    <div class="actions">
+      <button id="start" disabled>Start</button>
+      <button id="pause" class="secondary" disabled>Pause</button>
+      <button id="stop" class="secondary" disabled>Stop</button>
+    </div>
+    <div class="hint"><kbd>space</kbd> pause · <kbd>←</kbd>/<kbd>→</kbd> step · <kbd>f</kbd> fullscreen</div>
+    <div class="stats" id="stats">
+      <div><span>file</span><b id="sName">—</b></div>
+      <div><span>size</span><b id="sSize">—</b></div>
+      <div><span>sha-256</span><b id="sHash">—</b></div>
+      <div><span>chunk bytes</span><b id="sChunk">—</b></div>
+      <div><span>frames / loop</span><b id="sFrames">—</b></div>
+      <div><span>loop time</span><b id="sTime">—</b></div>
+      <div><span>goodput</span><b id="sRate">—</b></div>
+    </div>
+  </aside>
+  <section class="stage">
+    <div class="qrwrap"><canvas id="qr" width="400" height="400"></canvas></div>
+    <div class="progress"><i id="bar"></i></div>
+    <div class="caption">
+      <span>session <b id="cSid">—</b></span>
+      <span>frame <b id="cFrame">—</b></span>
+      <span>loop <b id="cLoop">0</b></span>
+      <span><b id="cState">idle</b></span>
+    </div>
+  </section>
+</main>
+
+<script src="qr-encoder.js"></script>
+<script src="../shared/qrx-protocol.js"></script>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const canvas = $('qr');
+  let payload = null;          // { bytes, name, mime }
+  let plan = null;             // { frames, header, sid, total, chunkBytes, ecl, version }
+  let timer = null, pos = 0, loop = 0, paused = false;
+  const cache = new Map();     // frame index -> ImageBitmap/canvas
+
+  // Idle screen: a QR that just says what this is, so the stage isn't blank.
+  QR.drawToCanvas(QR.encodeText('QRX sender ready — choose a file', 'M'), canvas, { pixels: 800 });
+
+  // --- inputs ---
+  const drop = $('drop'), fileInput = $('file');
+  drop.addEventListener('click', () => fileInput.click());
+  ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('hover'); }));
+  ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('hover'); }));
+  drop.addEventListener('drop', e => { if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
+  fileInput.addEventListener('change', () => fileInput.files[0] && loadFile(fileInput.files[0]));
+  $('text').addEventListener('input', () => {
+    if (fileInput.files[0]) return;
+    const t = $('text').value;
+    payload = t ? { bytes: new TextEncoder().encode(t), name: 'payload.txt', mime: 'text/plain' } : null;
+    $('dropText').textContent = payload ? 'Using pasted text' : 'Click or drop a file here';
+    refreshPlan();
+  });
+  ['ecl', 'version', 'fps', 'hdrEvery'].forEach(id => $(id).addEventListener('input', () => {
+    $('fpsOut').textContent = $('fps').value + ' fps';
+    $('hdrOut').textContent = $('hdrEvery').value;
+    if (id !== 'fps' && id !== 'hdrEvery') refreshPlan(); else updateStats();
+    if (timer && (id === 'fps')) { clearInterval(timer); timer = setInterval(tick, 1000 / +$('fps').value); }
+  }));
+
+  async function loadFile(f) {
+    const buf = await f.arrayBuffer();
+    payload = { bytes: new Uint8Array(buf), name: f.name, mime: f.type || 'application/octet-stream' };
+    $('dropText').textContent = f.name + ' (' + fmtBytes(f.size) + ')';
+    await refreshPlan();
+  }
+
+  async function refreshPlan() {
+    stop();
+    cache.clear();
+    if (!payload) { plan = null; updateStats(); $('start').disabled = true; return; }
+    const ecl = $('ecl').value, version = +$('version').value;
+    const cap = QR.maxBytes(version, ecl);
+    const chunkBytes = QRX.chunkBytesForCapacity(cap, Math.ceil(payload.bytes.length / 100) + 1);
+    const sha256 = await QRX.sha256Hex(payload.bytes);
+    const built = QRX.buildFrames(payload.bytes, { name: payload.name, mime: payload.mime, sha256 }, { chunkBytes });
+    plan = Object.assign(built, { ecl, version, sha256 });
+    $('start').disabled = false;
+    updateStats();
+    renderFrame(0, true);
+  }
+
+  // Playback order: header, then data frames, with the header re-inserted every N frames.
+  function sequence() {
+    const n = +$('hdrEvery').value, seq = [];
+    for (let i = 0; i < plan.total; i++) { if (i % n === 0) seq.push(-1); seq.push(i); }
+    return seq;
+  }
+  function frameText(i) { return i < 0 ? plan.header : plan.frames[i]; }
+
+  function renderFrame(seqPos, preview) {
+    const seq = sequence();
+    const i = seq[seqPos % seq.length];
+    let img = cache.get(i);
+    if (!img) {
+      const c = document.createElement('canvas');
+      const code = QR.encodeText(frameText(i), plan.ecl, { minVersion: 1, maxVersion: 40 });
+      QR.drawToCanvas(code, c, { pixels: 900 });
+      img = c; cache.set(i, c);
+      if (!preview && cache.size === 1) $('sFrames').textContent = seq.length + ' (v' + code.version + ')';
+    }
+    canvas.width = img.width; canvas.height = img.height;
+    canvas.getContext('2d').drawImage(img, 0, 0);
+    $('cSid').textContent = plan.sid;
+    $('cFrame').textContent = i < 0 ? 'HDR' : (i + 1) + '/' + plan.total;
+    $('bar').style.width = (100 * (seqPos % seq.length + 1) / seq.length).toFixed(1) + '%';
+  }
+
+  function tick() {
+    if (paused) return;
+    renderFrame(pos);
+    pos++;
+    const len = sequence().length;
+    if (pos % len === 0) { loop++; $('cLoop').textContent = loop; }
+  }
+  function start() {
+    if (!plan) return;
+    stop(false);
+    pos = 0; loop = 0; paused = false;
+    $('cLoop').textContent = 0; $('cState').textContent = 'sending';
+    timer = setInterval(tick, 1000 / +$('fps').value);
+    $('pause').disabled = false; $('stop').disabled = false; $('pause').textContent = 'Pause';
+  }
+  function togglePause() {
+    if (!timer) return;
+    paused = !paused;
+    $('pause').textContent = paused ? 'Resume' : 'Pause';
+    $('cState').textContent = paused ? 'paused' : 'sending';
+  }
+  function stop(resetView = true) {
+    if (timer) clearInterval(timer);
+    timer = null; paused = false;
+    $('pause').disabled = true; $('stop').disabled = true; $('cState').textContent = 'idle';
+    if (resetView && plan) renderFrame(0, true);
+  }
+  function step(d) {
+    if (!plan) return;
+    if (timer && !paused) togglePause();
+    const len = sequence().length;
+    pos = (pos + d + len) % len;
+    renderFrame(pos, true);
+  }
+  $('start').onclick = start; $('pause').onclick = togglePause; $('stop').onclick = () => stop();
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+    if (e.code === 'Space') { e.preventDefault(); timer ? togglePause() : start(); }
+    if (e.key === 'ArrowRight') step(1);
+    if (e.key === 'ArrowLeft') step(-1);
+    if (e.key === 'f') document.querySelector('.stage').requestFullscreen?.();
+  });
+
+  function updateStats() {
+    if (!plan) { ['sName', 'sSize', 'sHash', 'sChunk', 'sFrames', 'sTime', 'sRate'].forEach(id => $(id).textContent = '—'); return; }
+    const fps = +$('fps').value, seqLen = sequence().length;
+    $('sName').textContent = payload.name;
+    $('sSize').textContent = fmtBytes(payload.bytes.length);
+    $('sHash').textContent = plan.sha256.slice(0, 16) + '…';
+    $('sHash').title = plan.sha256;
+    $('sChunk').textContent = plan.chunkBytes + ' B';
+    $('sFrames').textContent = seqLen + ' (' + plan.total + ' data)';
+    $('sTime').textContent = fmtTime(seqLen / fps);
+    $('sRate').textContent = fmtBytes(payload.bytes.length / (seqLen / fps)) + '/s';
+  }
+  function fmtBytes(n) { return n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : (n / 1048576).toFixed(2) + ' MB'; }
+  function fmtTime(s) { return s < 60 ? s.toFixed(1) + ' s' : Math.floor(s / 60) + ' m ' + Math.round(s % 60) + ' s'; }
+})();
+</script>
+</body>
+</html>

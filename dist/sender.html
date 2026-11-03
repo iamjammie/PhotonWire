@@ -1,0 +1,766 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GlassWire Sender — air-gapped side</title>
+<style>
+  :root {
+    --bg: #0b0e14; --panel: #141923; --line: #232b3a; --fg: #e6e9ef; --muted: #8b94a7;
+    --accent: #ffb547; --ok: #3ddc84; --font: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 system-ui, sans-serif; }
+  header { display: flex; align-items: baseline; gap: 14px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0; font-size: 16px; letter-spacing: .04em; text-transform: uppercase; }
+  header .sub { color: var(--muted); font-family: var(--font); font-size: 12px; }
+  main { display: grid; grid-template-columns: 340px 1fr; min-height: calc(100vh - 49px); }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+  aside { padding: 18px 20px; border-right: 1px solid var(--line); background: var(--panel); }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+  .field input[type=text], .field select, .field textarea, .field input[type=number] {
+    width: 100%; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font: inherit;
+  }
+  .field textarea { font-family: var(--font); font-size: 12px; min-height: 72px; resize: vertical; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .range { display: flex; align-items: center; gap: 10px; }
+  .range input { flex: 1; accent-color: var(--accent); }
+  .range output { font-family: var(--font); min-width: 54px; text-align: right; }
+  .drop { border: 1px dashed #3a4356; border-radius: 8px; padding: 14px; text-align: center; color: var(--muted); cursor: pointer; }
+  .drop.hover { border-color: var(--accent); color: var(--fg); }
+  .drop input { display: none; }
+  button { background: var(--accent); color: #1a1200; border: 0; border-radius: 6px; padding: 10px 14px; font: inherit; font-weight: 600; cursor: pointer; }
+  button.secondary { background: transparent; color: var(--fg); border: 1px solid var(--line); }
+  button:disabled { opacity: .45; cursor: default; }
+  .actions { display: flex; gap: 8px; margin-top: 8px; }
+  .stats { margin-top: 16px; font-family: var(--font); font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 12px; }
+  .stats div { display: flex; justify-content: space-between; padding: 2px 0; }
+  .stats b { color: var(--fg); font-weight: 500; }
+  section.stage { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; gap: 14px; }
+  .qrwrap { background: #fff; padding: 0; border-radius: 10px; box-shadow: 0 0 0 1px var(--line), 0 30px 80px rgba(0,0,0,.5); line-height: 0; }
+  canvas { display: block; image-rendering: pixelated; width: min(78vh, 92vw, 760px); height: auto; }
+  .progress { width: min(78vh, 92vw, 760px); height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+  .progress i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .1s linear; }
+  .caption { font-family: var(--font); color: var(--muted); font-size: 12px; display: flex; gap: 18px; }
+  .caption b { color: var(--fg); font-weight: 500; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 10px; }
+  kbd { font-family: var(--font); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>GlassWire <span style="opacity:.55;font-weight:400">Sender</span></h1>
+  <span class="sub">air-gapped · no network · frames loop until you stop</span>
+</header>
+<main>
+  <aside>
+    <div class="field">
+      <label>Payload</label>
+      <div class="drop" id="drop">
+        <input type="file" id="file">
+        <span id="dropText">Click or drop a file here</span>
+      </div>
+    </div>
+    <div class="field">
+      <label>…or paste text</label>
+      <textarea id="text" placeholder="Anything typed here is sent as payload.txt (ignored if a file is chosen)"></textarea>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>Error correction</label>
+        <select id="ecl">
+          <option value="L" selected>L — 7 % (densest)</option>
+          <option value="M">M — 15 %</option>
+          <option value="Q">Q — 25 %</option>
+          <option value="H">H — 30 %</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>QR version (density)</label>
+        <select id="version">
+          <option value="8">8 — 49 modules</option>
+          <option value="10">10 — 57 modules</option>
+          <option value="12" selected>12 — 65 modules</option>
+          <option value="15">15 — 77 modules</option>
+          <option value="18">18 — 89 modules</option>
+          <option value="20">20 — 97 modules</option>
+          <option value="25">25 — 117 modules</option>
+          <option value="30">30 — 137 modules</option>
+          <option value="40">40 — 177 modules</option>
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label>Frame rate</label>
+      <div class="range"><input type="range" id="fps" min="1" max="20" value="6"><output id="fpsOut">6 fps</output></div>
+    </div>
+    <div class="field">
+      <label>Header every N frames</label>
+      <div class="range"><input type="range" id="hdrEvery" min="2" max="30" value="8"><output id="hdrOut">8</output></div>
+    </div>
+    <div class="actions">
+      <button id="start" disabled>Start</button>
+      <button id="pause" class="secondary" disabled>Pause</button>
+      <button id="stop" class="secondary" disabled>Stop</button>
+    </div>
+    <div class="hint"><kbd>space</kbd> pause · <kbd>←</kbd>/<kbd>→</kbd> step · <kbd>f</kbd> fullscreen</div>
+    <div class="stats" id="stats">
+      <div><span>file</span><b id="sName">—</b></div>
+      <div><span>size</span><b id="sSize">—</b></div>
+      <div><span>sha-256</span><b id="sHash">—</b></div>
+      <div><span>chunk bytes</span><b id="sChunk">—</b></div>
+      <div><span>frames / loop</span><b id="sFrames">—</b></div>
+      <div><span>loop time</span><b id="sTime">—</b></div>
+      <div><span>goodput</span><b id="sRate">—</b></div>
+    </div>
+  </aside>
+  <section class="stage">
+    <div class="qrwrap"><canvas id="qr" width="400" height="400"></canvas></div>
+    <div class="progress"><i id="bar"></i></div>
+    <div class="caption">
+      <span>session <b id="cSid">—</b></span>
+      <span>frame <b id="cFrame">—</b></span>
+      <span>loop <b id="cLoop">0</b></span>
+      <span><b id="cState">idle</b></span>
+    </div>
+  </section>
+</main>
+
+<script>/* inlined: qr-encoder.js */
+/*
+ * qr-encoder.js — dependency-free QR Code encoder (byte mode, versions 1–40, EC L/M/Q/H).
+ *
+ * Works in the browser (window.QR) and in Node (module.exports). No network, no deps —
+ * safe to copy onto an air-gapped machine.
+ *
+ * API:
+ *   QR.encodeBytes(bytes: Uint8Array, ecl: 'L'|'M'|'Q'|'H', opts?) -> { version, size, mask, get(x,y) }
+ *   QR.encodeText(str, ecl, opts)          // UTF-8 encodes then calls encodeBytes
+ *   QR.maxBytes(version, ecl)              // byte-mode payload capacity of a version
+ *   QR.drawToCanvas(code, canvas, { scale, quiet })
+ *   QR.toSVG(code, { quiet })
+ */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.QR = factory();
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  // ---------- tables (index = version, 0 unused) ----------
+  const ECC_CODEWORDS_PER_BLOCK = {
+    L: [-1, 7, 10, 15, 20, 26, 18, 20, 24, 30, 18, 20, 24, 26, 30, 22, 24, 28, 30, 28, 28, 28, 28, 30, 30, 26, 28, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30],
+    M: [-1, 10, 16, 26, 18, 24, 16, 18, 22, 22, 26, 30, 22, 22, 24, 24, 28, 28, 26, 26, 26, 26, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28],
+    Q: [-1, 13, 22, 18, 26, 18, 24, 18, 22, 20, 24, 28, 26, 24, 20, 30, 24, 28, 28, 26, 30, 28, 30, 30, 30, 30, 28, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30],
+    H: [-1, 17, 28, 22, 16, 22, 28, 26, 26, 24, 28, 24, 28, 22, 24, 24, 30, 28, 28, 26, 28, 30, 24, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30],
+  };
+  const NUM_ERROR_CORRECTION_BLOCKS = {
+    L: [-1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 4, 4, 4, 4, 4, 6, 6, 6, 6, 7, 8, 8, 9, 9, 10, 12, 12, 12, 13, 14, 15, 16, 17, 18, 19, 19, 20, 21, 22, 24, 25],
+    M: [-1, 1, 1, 1, 2, 2, 4, 4, 4, 5, 5, 5, 8, 9, 9, 10, 10, 11, 13, 14, 16, 17, 17, 18, 20, 21, 23, 25, 26, 28, 29, 31, 33, 35, 37, 38, 40, 43, 45, 47, 49],
+    Q: [-1, 1, 1, 2, 2, 4, 4, 6, 6, 8, 8, 8, 10, 12, 16, 12, 17, 16, 18, 21, 20, 23, 23, 25, 27, 29, 34, 34, 35, 38, 40, 43, 45, 48, 51, 53, 56, 59, 62, 65, 68],
+    H: [-1, 1, 1, 2, 4, 4, 4, 5, 6, 8, 8, 11, 11, 16, 16, 18, 16, 19, 21, 25, 25, 25, 34, 30, 32, 35, 37, 40, 42, 45, 48, 51, 54, 57, 60, 63, 66, 70, 74, 77, 81],
+  };
+  const ECL_FORMAT_BITS = { L: 1, M: 0, Q: 3, H: 2 };
+  const PENALTY = { N1: 3, N2: 3, N3: 40, N4: 10 };
+
+  // ---------- capacity helpers ----------
+  function numRawDataModules(ver) {
+    let r = (16 * ver + 128) * ver + 64;
+    if (ver >= 2) {
+      const numAlign = Math.floor(ver / 7) + 2;
+      r -= (25 * numAlign - 10) * numAlign - 55;
+      if (ver >= 7) r -= 36;
+    }
+    return r;
+  }
+  function numDataCodewords(ver, ecl) {
+    return Math.floor(numRawDataModules(ver) / 8) -
+      ECC_CODEWORDS_PER_BLOCK[ecl][ver] * NUM_ERROR_CORRECTION_BLOCKS[ecl][ver];
+  }
+  function byteCountBits(ver) { return ver <= 9 ? 8 : 16; }
+  function maxBytes(ver, ecl) {
+    return Math.floor((numDataCodewords(ver, ecl) * 8 - 4 - byteCountBits(ver)) / 8);
+  }
+
+  // ---------- Reed–Solomon over GF(2^8), poly 0x11D ----------
+  function gfMul(x, y) {
+    let z = 0;
+    for (let i = 7; i >= 0; i--) {
+      z = (z << 1) ^ ((z >>> 7) * 0x11D);
+      z ^= ((y >>> i) & 1) * x;
+    }
+    return z & 0xFF;
+  }
+  function rsDivisor(degree) {
+    const result = new Uint8Array(degree);
+    result[degree - 1] = 1;
+    let root = 1;
+    for (let i = 0; i < degree; i++) {
+      for (let j = 0; j < degree; j++) {
+        result[j] = gfMul(result[j], root);
+        if (j + 1 < degree) result[j] ^= result[j + 1];
+      }
+      root = gfMul(root, 0x02);
+    }
+    return result;
+  }
+  function rsRemainder(data, divisor) {
+    const result = new Uint8Array(divisor.length);
+    for (const b of data) {
+      const factor = b ^ result[0];
+      result.copyWithin(0, 1);
+      result[result.length - 1] = 0;
+      for (let i = 0; i < result.length; i++) result[i] ^= gfMul(divisor[i], factor);
+    }
+    return result;
+  }
+
+  // ---------- bit buffer ----------
+  function appendBits(buf, val, len) {
+    for (let i = len - 1; i >= 0; i--) buf.push((val >>> i) & 1);
+  }
+
+  // ---------- main encode ----------
+  function encodeBytes(bytes, ecl, opts) {
+    ecl = (ecl || 'M').toUpperCase();
+    if (!(ecl in ECL_FORMAT_BITS)) throw new Error('Bad EC level ' + ecl);
+    opts = opts || {};
+    const minVer = opts.minVersion || 1, maxVer = opts.maxVersion || 40;
+    let version = -1;
+    for (let v = minVer; v <= maxVer; v++) {
+      if (maxBytes(v, ecl) >= bytes.length) { version = v; break; }
+    }
+    if (version < 0) throw new Error('Data too long: ' + bytes.length + ' bytes');
+
+    // Segment: byte mode
+    const bits = [];
+    appendBits(bits, 0x4, 4);
+    appendBits(bits, bytes.length, byteCountBits(version));
+    for (const b of bytes) appendBits(bits, b, 8);
+
+    const dataCapBits = numDataCodewords(version, ecl) * 8;
+    appendBits(bits, 0, Math.min(4, dataCapBits - bits.length));
+    appendBits(bits, 0, (8 - bits.length % 8) % 8);
+    for (let pad = 0xEC; bits.length < dataCapBits; pad ^= 0xEC ^ 0x11) appendBits(bits, pad, 8);
+
+    const dataCodewords = new Uint8Array(bits.length / 8);
+    bits.forEach((b, i) => { dataCodewords[i >>> 3] |= b << (7 - (i & 7)); });
+
+    const size = version * 4 + 17;
+    const modules = [], isFunction = [];
+    for (let y = 0; y < size; y++) { modules.push(new Uint8Array(size)); isFunction.push(new Uint8Array(size)); }
+
+    const setFn = (x, y, dark) => { modules[y][x] = dark ? 1 : 0; isFunction[y][x] = 1; };
+
+    // --- function patterns ---
+    function drawFinder(cx, cy) {
+      for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) {
+        const dist = Math.max(Math.abs(dx), Math.abs(dy));
+        const x = cx + dx, y = cy + dy;
+        if (x >= 0 && x < size && y >= 0 && y < size) setFn(x, y, dist !== 2 && dist !== 4);
+      }
+    }
+    function drawAlign(cx, cy) {
+      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++)
+        setFn(cx + dx, cy + dy, Math.max(Math.abs(dx), Math.abs(dy)) !== 1);
+    }
+    function alignPositions() {
+      if (version === 1) return [];
+      const numAlign = Math.floor(version / 7) + 2;
+      const step = version === 32 ? 26 : Math.ceil((version * 4 + 4) / (numAlign * 2 - 2)) * 2;
+      const res = [6];
+      for (let pos = size - 7; res.length < numAlign; pos -= step) res.splice(1, 0, pos);
+      return res;
+    }
+    function drawFormatBits(mask) {
+      const data = ECL_FORMAT_BITS[ecl] << 3 | mask;
+      let rem = data;
+      for (let i = 0; i < 10; i++) rem = (rem << 1) ^ ((rem >>> 9) * 0x537);
+      const b = (data << 10 | rem) ^ 0x5412;
+      const bit = i => (b >>> i) & 1;
+      for (let i = 0; i <= 5; i++) setFn(8, i, bit(i));
+      setFn(8, 7, bit(6)); setFn(8, 8, bit(7)); setFn(7, 8, bit(8));
+      for (let i = 9; i < 15; i++) setFn(14 - i, 8, bit(i));
+      for (let i = 0; i < 8; i++) setFn(size - 1 - i, 8, bit(i));
+      for (let i = 8; i < 15; i++) setFn(8, size - 15 + i, bit(i));
+      setFn(8, size - 8, 1);
+    }
+    function drawVersion() {
+      if (version < 7) return;
+      let rem = version;
+      for (let i = 0; i < 12; i++) rem = (rem << 1) ^ ((rem >>> 11) * 0x1F25);
+      const b = version << 12 | rem;
+      for (let i = 0; i < 18; i++) {
+        const bit = (b >>> i) & 1, a = size - 11 + i % 3, c = Math.floor(i / 3);
+        setFn(a, c, bit); setFn(c, a, bit);
+      }
+    }
+    for (let i = 0; i < size; i++) { setFn(6, i, i % 2 === 0); setFn(i, 6, i % 2 === 0); }
+    drawFinder(3, 3); drawFinder(size - 4, 3); drawFinder(3, size - 4);
+    const ap = alignPositions(), n = ap.length;
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+      if ((i === 0 && j === 0) || (i === 0 && j === n - 1) || (i === n - 1 && j === 0)) continue;
+      drawAlign(ap[i], ap[j]);
+    }
+    drawFormatBits(0);
+    drawVersion();
+
+    // --- error correction + interleave ---
+    const numBlocks = NUM_ERROR_CORRECTION_BLOCKS[ecl][version];
+    const blockEccLen = ECC_CODEWORDS_PER_BLOCK[ecl][version];
+    const rawCodewords = Math.floor(numRawDataModules(version) / 8);
+    const numShortBlocks = numBlocks - rawCodewords % numBlocks;
+    const shortBlockLen = Math.floor(rawCodewords / numBlocks);
+    const blocks = [];
+    const rsDiv = rsDivisor(blockEccLen);
+    for (let i = 0, k = 0; i < numBlocks; i++) {
+      const datLen = shortBlockLen - blockEccLen + (i < numShortBlocks ? 0 : 1);
+      const dat = dataCodewords.slice(k, k + datLen);
+      k += datLen;
+      const ecc = rsRemainder(dat, rsDiv);
+      const block = new Uint8Array(shortBlockLen + 1);
+      block.set(dat); block.set(ecc, shortBlockLen + 1 - blockEccLen);
+      blocks.push(block);
+    }
+    const allCodewords = new Uint8Array(rawCodewords);
+    let k = 0;
+    for (let i = 0; i < blocks[0].length; i++) for (let j = 0; j < blocks.length; j++) {
+      if (i !== shortBlockLen - blockEccLen || j >= numShortBlocks) allCodewords[k++] = blocks[j][i];
+    }
+
+    // --- place codewords (zigzag) ---
+    let bi = 0;
+    for (let right = size - 1; right >= 1; right -= 2) {
+      if (right === 6) right = 5;
+      for (let vert = 0; vert < size; vert++) for (let j = 0; j < 2; j++) {
+        const x = right - j;
+        const upward = ((right + 1) & 2) === 0;
+        const y = upward ? size - 1 - vert : vert;
+        if (!isFunction[y][x] && bi < allCodewords.length * 8) {
+          modules[y][x] = (allCodewords[bi >>> 3] >>> (7 - (bi & 7))) & 1;
+          bi++;
+        }
+      }
+    }
+
+    // --- masking ---
+    const maskFns = [
+      (x, y) => (x + y) % 2 === 0,
+      (x, y) => y % 2 === 0,
+      (x, y) => x % 3 === 0,
+      (x, y) => (x + y) % 3 === 0,
+      (x, y) => (Math.floor(x / 3) + Math.floor(y / 2)) % 2 === 0,
+      (x, y) => (x * y) % 2 + (x * y) % 3 === 0,
+      (x, y) => ((x * y) % 2 + (x * y) % 3) % 2 === 0,
+      (x, y) => ((x + y) % 2 + (x * y) % 3) % 2 === 0,
+    ];
+    function applyMask(m) {
+      const f = maskFns[m];
+      for (let y = 0; y < size; y++) for (let x = 0; x < size; x++)
+        if (!isFunction[y][x] && f(x, y)) modules[y][x] ^= 1;
+    }
+    function penalty() {
+      let score = 0;
+      const finderPat = [1, 0, 1, 1, 1, 0, 1];
+      const countFinder = (line) => {
+        let c = 0;
+        for (let i = 0; i + 7 <= line.length; i++) {
+          let ok = true;
+          for (let j = 0; j < 7; j++) if (line[i + j] !== finderPat[j]) { ok = false; break; }
+          if (!ok) continue;
+          const lightBefore = i >= 4 && line.slice(i - 4, i).every(v => v === 0);
+          const lightAfter = i + 11 <= line.length && line.slice(i + 7, i + 11).every(v => v === 0);
+          if (lightBefore || lightAfter) c++;
+        }
+        return c;
+      };
+      for (let y = 0; y < size; y++) {
+        const row = modules[y], col = new Uint8Array(size);
+        for (let x = 0; x < size; x++) col[x] = modules[x][y];
+        for (const line of [row, col]) {
+          let run = 1;
+          for (let i = 1; i < size; i++) {
+            if (line[i] === line[i - 1]) { run++; if (run === 5) score += PENALTY.N1; else if (run > 5) score++; }
+            else run = 1;
+          }
+          score += countFinder(line) * PENALTY.N3;
+        }
+      }
+      for (let y = 0; y < size - 1; y++) for (let x = 0; x < size - 1; x++) {
+        const c = modules[y][x];
+        if (c === modules[y][x + 1] && c === modules[y + 1][x] && c === modules[y + 1][x + 1]) score += PENALTY.N2;
+      }
+      let dark = 0;
+      for (const row of modules) for (const v of row) dark += v;
+      const total = size * size;
+      const kk = Math.ceil(Math.abs(dark * 20 - total * 10) / total) - 1;
+      score += kk * PENALTY.N4;
+      return score;
+    }
+
+    let mask = opts.mask;
+    if (mask === undefined || mask < 0) {
+      let best = Infinity;
+      for (let m = 0; m < 8; m++) {
+        applyMask(m); drawFormatBits(m);
+        const p = penalty();
+        if (p < best) { best = p; mask = m; }
+        applyMask(m);
+      }
+    }
+    applyMask(mask); drawFormatBits(mask);
+
+    return {
+      version, size, mask, ecl,
+      modules,
+      get: (x, y) => (x >= 0 && y >= 0 && x < size && y < size) ? modules[y][x] === 1 : false,
+    };
+  }
+
+  function encodeText(str, ecl, opts) {
+    const bytes = typeof TextEncoder !== 'undefined' ? new TextEncoder().encode(str) : Uint8Array.from(Buffer.from(str, 'utf8'));
+    return encodeBytes(bytes, ecl, opts);
+  }
+
+  function drawToCanvas(code, canvas, opts) {
+    opts = opts || {};
+    const quiet = opts.quiet === undefined ? 4 : opts.quiet;
+    const total = code.size + quiet * 2;
+    const scale = opts.scale || Math.max(1, Math.floor((opts.pixels || 640) / total));
+    canvas.width = canvas.height = total * scale;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = opts.light || '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = opts.dark || '#000';
+    for (let y = 0; y < code.size; y++) for (let x = 0; x < code.size; x++)
+      if (code.modules[y][x]) ctx.fillRect((x + quiet) * scale, (y + quiet) * scale, scale, scale);
+    return canvas;
+  }
+
+  function toSVG(code, opts) {
+    opts = opts || {};
+    const quiet = opts.quiet === undefined ? 4 : opts.quiet;
+    const total = code.size + quiet * 2;
+    let d = '';
+    for (let y = 0; y < code.size; y++) for (let x = 0; x < code.size; x++)
+      if (code.modules[y][x]) d += `M${x + quiet} ${y + quiet}h1v1h-1z`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${total} ${total}" shape-rendering="crispEdges">` +
+      `<rect width="100%" height="100%" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;
+  }
+
+  return { encodeBytes, encodeText, maxBytes, drawToCanvas, toSVG, numDataCodewords };
+});
+
+</script>
+<script>/* inlined: ../shared/qrx-protocol.js */
+/*
+ * qrx-protocol.js — the QRX/1 frame format shared by the sender and the receiver.
+ *
+ * Every QR code carries one UTF-8 text frame. Fields are '|' separated; the payload is
+ * standard base64 (always the last field, so it may never contain '|').
+ *
+ *   Header frame (repeated periodically so the receiver can join at any time):
+ *     QRX1H|<sid>|<total>|<size>|<sha256-hex>|<filename-urlencoded>|<mime>|<chunkBytes>
+ *
+ *   Data frame:
+ *     QRX1D|<sid>|<idx>|<total>|<base64 chunk>
+ *
+ *   sid      6-char random session id — lets the receiver ignore stale frames from a
+ *            previous transfer still visible on screen.
+ *   idx      0-based chunk index; total = number of chunks.
+ *   size     original file length in bytes; sha256 is over the whole file.
+ *
+ * The receiver needs no ordering: it collects chunks by idx, and the sender loops forever,
+ * so any frame the camera missed comes around again. Completion = all idx seen; integrity =
+ * SHA-256 matches the header.
+ */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.QRX = factory();
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  const MAGIC_H = 'QRX1H', MAGIC_D = 'QRX1D';
+
+  // --- base64 that works in browsers and Node without Buffer ---
+  const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  const B64_REV = (() => { const m = new Int16Array(128).fill(-1); for (let i = 0; i < 64; i++) m[B64.charCodeAt(i)] = i; return m; })();
+  function b64encode(bytes) {
+    let out = '';
+    for (let i = 0; i < bytes.length; i += 3) {
+      const n = (bytes[i] << 16) | ((bytes[i + 1] || 0) << 8) | (bytes[i + 2] || 0);
+      out += B64[n >> 18] + B64[(n >> 12) & 63] +
+        (i + 1 < bytes.length ? B64[(n >> 6) & 63] : '=') +
+        (i + 2 < bytes.length ? B64[n & 63] : '=');
+    }
+    return out;
+  }
+  function b64decode(str) {
+    str = str.replace(/[^A-Za-z0-9+/]/g, '');
+    const out = new Uint8Array(Math.floor(str.length * 3 / 4));
+    let o = 0;
+    for (let i = 0; i < str.length; i += 4) {
+      const a = B64_REV[str.charCodeAt(i)], b = B64_REV[str.charCodeAt(i + 1)];
+      const c = i + 2 < str.length ? B64_REV[str.charCodeAt(i + 2)] : -1;
+      const d = i + 3 < str.length ? B64_REV[str.charCodeAt(i + 3)] : -1;
+      if (a < 0 || b < 0) throw new Error('bad base64');
+      out[o++] = (a << 2) | (b >> 4);
+      if (c >= 0) out[o++] = ((b & 15) << 4) | (c >> 2);
+      if (d >= 0) out[o++] = ((c & 3) << 6) | d;
+    }
+    return out.subarray(0, o);
+  }
+
+  function randomSid() {
+    const alpha = 'abcdefghijkmnpqrstuvwxyz23456789';
+    let s = '';
+    const rnd = (typeof crypto !== 'undefined' && crypto.getRandomValues)
+      ? crypto.getRandomValues(new Uint8Array(6)) : Array.from({ length: 6 }, () => Math.random() * 256 | 0);
+    for (const v of rnd) s += alpha[v % alpha.length];
+    return s;
+  }
+
+  // ---------- sender side ----------
+  /** Split a file into frames. Returns { sid, total, header, frames: string[] }. */
+  function buildFrames(bytes, meta, opts) {
+    opts = opts || {};
+    const chunkBytes = opts.chunkBytes || 300;
+    const sid = opts.sid || randomSid();
+    const total = Math.max(1, Math.ceil(bytes.length / chunkBytes));
+    const frames = [];
+    for (let i = 0; i < total; i++) {
+      const chunk = bytes.subarray(i * chunkBytes, (i + 1) * chunkBytes);
+      frames.push([MAGIC_D, sid, i, total, b64encode(chunk)].join('|'));
+    }
+    const header = [MAGIC_H, sid, total, bytes.length, meta.sha256 || '',
+      encodeURIComponent(meta.name || 'payload.bin'), meta.mime || 'application/octet-stream', chunkBytes].join('|');
+    return { sid, total, header, frames, chunkBytes };
+  }
+
+  /** How many bytes of overhead a data frame has beyond the base64 payload, for sizing. */
+  function dataFrameOverhead(sid, total) {
+    return [MAGIC_D, sid || 'xxxxxx', total, total, ''].join('|').length;
+  }
+
+  /** Largest chunk (in raw bytes) that fits a QR of `qrCapacityBytes` text bytes. */
+  function chunkBytesForCapacity(qrCapacityBytes, total) {
+    const room = qrCapacityBytes - dataFrameOverhead(null, total || 9999);
+    return Math.max(1, Math.floor(room / 4) * 3);
+  }
+
+  // ---------- receiver side ----------
+  /** Parse a scanned string. Returns {type:'header'|'data', ...} or null if not a QRX frame. */
+  function parseFrame(text) {
+    if (typeof text !== 'string') return null;
+    if (text.startsWith(MAGIC_D + '|')) {
+      const parts = text.split('|');
+      if (parts.length !== 5) return null;
+      const idx = +parts[2], total = +parts[3];
+      if (!Number.isInteger(idx) || !Number.isInteger(total) || idx < 0 || idx >= total) return null;
+      let bytes;
+      try { bytes = b64decode(parts[4]); } catch (e) { return null; }
+      return { type: 'data', sid: parts[1], idx, total, bytes };
+    }
+    if (text.startsWith(MAGIC_H + '|')) {
+      const parts = text.split('|');
+      if (parts.length < 7) return null;
+      return {
+        type: 'header', sid: parts[1], total: +parts[2], size: +parts[3], sha256: parts[4],
+        name: safeDecode(parts[5]), mime: parts[6] || 'application/octet-stream', chunkBytes: +(parts[7] || 0),
+      };
+    }
+    return null;
+  }
+  function safeDecode(s) { try { return decodeURIComponent(s); } catch (e) { return s; } }
+
+  /** Stateful reassembler. feed(text) -> event object describing what changed. */
+  function createReceiver() {
+    const st = { sid: null, total: 0, chunks: new Map(), header: null, received: 0 };
+    function reset(sid) { st.sid = sid; st.total = 0; st.chunks = new Map(); st.header = null; st.received = 0; }
+    return {
+      state: st,
+      reset: () => reset(null),
+      feed(text) {
+        const f = parseFrame(text);
+        if (!f) return { kind: 'ignored' };
+        if (st.sid && f.sid !== st.sid) {
+          // A new session appeared on screen: switch to it (old one is abandoned).
+          reset(f.sid);
+        } else if (!st.sid) reset(f.sid);
+        if (f.type === 'header') {
+          st.header = f; st.total = f.total;
+          return { kind: 'header', header: f, complete: this.isComplete() };
+        }
+        st.total = st.total || f.total;
+        if (st.chunks.has(f.idx)) return { kind: 'dup', idx: f.idx, complete: this.isComplete() };
+        st.chunks.set(f.idx, f.bytes);
+        st.received = st.chunks.size;
+        return { kind: 'chunk', idx: f.idx, received: st.received, total: st.total, complete: this.isComplete() };
+      },
+      isComplete() { return st.total > 0 && st.chunks.size >= st.total; },
+      missing() { const m = []; for (let i = 0; i < st.total; i++) if (!st.chunks.has(i)) m.push(i); return m; },
+      assemble() {
+        if (!this.isComplete()) throw new Error('incomplete');
+        let len = 0; for (let i = 0; i < st.total; i++) len += st.chunks.get(i).length;
+        const out = new Uint8Array(len); let o = 0;
+        for (let i = 0; i < st.total; i++) { out.set(st.chunks.get(i), o); o += st.chunks.get(i).length; }
+        return out;
+      },
+    };
+  }
+
+  async function sha256Hex(bytes) {
+    if (typeof crypto !== 'undefined' && crypto.subtle) {
+      const d = await crypto.subtle.digest('SHA-256', bytes);
+      return Array.from(new Uint8Array(d)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+    return require('crypto').createHash('sha256').update(bytes).digest('hex');
+  }
+
+  return { MAGIC_H, MAGIC_D, b64encode, b64decode, randomSid, buildFrames, chunkBytesForCapacity,
+    dataFrameOverhead, parseFrame, createReceiver, sha256Hex };
+});
+
+</script>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const canvas = $('qr');
+  let payload = null;          // { bytes, name, mime }
+  let plan = null;             // { frames, header, sid, total, chunkBytes, ecl, version }
+  let timer = null, pos = 0, loop = 0, paused = false;
+  const cache = new Map();     // frame index -> ImageBitmap/canvas
+
+  // Idle screen: a QR that just says what this is, so the stage isn't blank.
+  QR.drawToCanvas(QR.encodeText('QRX sender ready — choose a file', 'M'), canvas, { pixels: 800 });
+
+  // --- inputs ---
+  const drop = $('drop'), fileInput = $('file');
+  drop.addEventListener('click', () => fileInput.click());
+  ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('hover'); }));
+  ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('hover'); }));
+  drop.addEventListener('drop', e => { if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
+  fileInput.addEventListener('change', () => fileInput.files[0] && loadFile(fileInput.files[0]));
+  $('text').addEventListener('input', () => {
+    if (fileInput.files[0]) return;
+    const t = $('text').value;
+    payload = t ? { bytes: new TextEncoder().encode(t), name: 'payload.txt', mime: 'text/plain' } : null;
+    $('dropText').textContent = payload ? 'Using pasted text' : 'Click or drop a file here';
+    refreshPlan();
+  });
+  ['ecl', 'version', 'fps', 'hdrEvery'].forEach(id => $(id).addEventListener('input', () => {
+    $('fpsOut').textContent = $('fps').value + ' fps';
+    $('hdrOut').textContent = $('hdrEvery').value;
+    if (id !== 'fps' && id !== 'hdrEvery') refreshPlan(); else updateStats();
+    if (timer && (id === 'fps')) { clearInterval(timer); timer = setInterval(tick, 1000 / +$('fps').value); }
+  }));
+
+  async function loadFile(f) {
+    const buf = await f.arrayBuffer();
+    payload = { bytes: new Uint8Array(buf), name: f.name, mime: f.type || 'application/octet-stream' };
+    $('dropText').textContent = f.name + ' (' + fmtBytes(f.size) + ')';
+    await refreshPlan();
+  }
+
+  async function refreshPlan() {
+    stop();
+    cache.clear();
+    if (!payload) { plan = null; updateStats(); $('start').disabled = true; return; }
+    const ecl = $('ecl').value, version = +$('version').value;
+    const cap = QR.maxBytes(version, ecl);
+    const chunkBytes = QRX.chunkBytesForCapacity(cap, Math.ceil(payload.bytes.length / 100) + 1);
+    const sha256 = await QRX.sha256Hex(payload.bytes);
+    const built = QRX.buildFrames(payload.bytes, { name: payload.name, mime: payload.mime, sha256 }, { chunkBytes });
+    plan = Object.assign(built, { ecl, version, sha256 });
+    $('start').disabled = false;
+    updateStats();
+    renderFrame(0, true);
+  }
+
+  // Playback order: header, then data frames, with the header re-inserted every N frames.
+  function sequence() {
+    const n = +$('hdrEvery').value, seq = [];
+    for (let i = 0; i < plan.total; i++) { if (i % n === 0) seq.push(-1); seq.push(i); }
+    return seq;
+  }
+  function frameText(i) { return i < 0 ? plan.header : plan.frames[i]; }
+
+  function renderFrame(seqPos, preview) {
+    const seq = sequence();
+    const i = seq[seqPos % seq.length];
+    let img = cache.get(i);
+    if (!img) {
+      const c = document.createElement('canvas');
+      const code = QR.encodeText(frameText(i), plan.ecl, { minVersion: 1, maxVersion: 40 });
+      QR.drawToCanvas(code, c, { pixels: 900 });
+      img = c; cache.set(i, c);
+      if (!preview && cache.size === 1) $('sFrames').textContent = seq.length + ' (v' + code.version + ')';
+    }
+    canvas.width = img.width; canvas.height = img.height;
+    canvas.getContext('2d').drawImage(img, 0, 0);
+    $('cSid').textContent = plan.sid;
+    $('cFrame').textContent = i < 0 ? 'HDR' : (i + 1) + '/' + plan.total;
+    $('bar').style.width = (100 * (seqPos % seq.length + 1) / seq.length).toFixed(1) + '%';
+  }
+
+  function tick() {
+    if (paused) return;
+    renderFrame(pos);
+    pos++;
+    const len = sequence().length;
+    if (pos % len === 0) { loop++; $('cLoop').textContent = loop; }
+  }
+  function start() {
+    if (!plan) return;
+    stop(false);
+    pos = 0; loop = 0; paused = false;
+    $('cLoop').textContent = 0; $('cState').textContent = 'sending';
+    timer = setInterval(tick, 1000 / +$('fps').value);
+    $('pause').disabled = false; $('stop').disabled = false; $('pause').textContent = 'Pause';
+  }
+  function togglePause() {
+    if (!timer) return;
+    paused = !paused;
+    $('pause').textContent = paused ? 'Resume' : 'Pause';
+    $('cState').textContent = paused ? 'paused' : 'sending';
+  }
+  function stop(resetView = true) {
+    if (timer) clearInterval(timer);
+    timer = null; paused = false;
+    $('pause').disabled = true; $('stop').disabled = true; $('cState').textContent = 'idle';
+    if (resetView && plan) renderFrame(0, true);
+  }
+  function step(d) {
+    if (!plan) return;
+    if (timer && !paused) togglePause();
+    const len = sequence().length;
+    pos = (pos + d + len) % len;
+    renderFrame(pos, true);
+  }
+  $('start').onclick = start; $('pause').onclick = togglePause; $('stop').onclick = () => stop();
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+    if (e.code === 'Space') { e.preventDefault(); timer ? togglePause() : start(); }
+    if (e.key === 'ArrowRight') step(1);
+    if (e.key === 'ArrowLeft') step(-1);
+    if (e.key === 'f') document.querySelector('.stage').requestFullscreen?.();
+  });
+
+  function updateStats() {
+    if (!plan) { ['sName', 'sSize', 'sHash', 'sChunk', 'sFrames', 'sTime', 'sRate'].forEach(id => $(id).textContent = '—'); return; }
+    const fps = +$('fps').value, seqLen = sequence().length;
+    $('sName').textContent = payload.name;
+    $('sSize').textContent = fmtBytes(payload.bytes.length);
+    $('sHash').textContent = plan.sha256.slice(0, 16) + '…';
+    $('sHash').title = plan.sha256;
+    $('sChunk').textContent = plan.chunkBytes + ' B';
+    $('sFrames').textContent = seqLen + ' (' + plan.total + ' data)';
+    $('sTime').textContent = fmtTime(seqLen / fps);
+    $('sRate').textContent = fmtBytes(payload.bytes.length / (seqLen / fps)) + '/s';
+  }
+  function fmtBytes(n) { return n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : (n / 1048576).toFixed(2) + ' MB'; }
+  function fmtTime(s) { return s < 60 ? s.toFixed(1) + ' s' : Math.floor(s / 60) + ' m ' + Math.round(s % 60) + ' s'; }
+})();
+</script>
+</body>
+</html>

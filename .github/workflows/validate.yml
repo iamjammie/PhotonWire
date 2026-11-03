@@ -1,0 +1,44 @@
+name: Validate
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Codecs, chain, build output
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install test dependencies (the tools themselves need none)
+        run: pip install opencv-python-headless numpy
+      - name: Syntax-check JavaScript
+        run: |
+          node --check sender/qr-encoder.js
+          node --check receiver/qr-decoder.js
+          node --check shared/qrx-protocol.js
+          node --check receiver/sw.js
+      - name: JS encoder vs OpenCV decoder (v1-40 × L/M/Q/H)
+        run: python3 test/encoder_check.py
+      - name: Python encoder bit-identical to JS
+        run: python3 test/python_vs_js.py
+      - name: Embedded decoder on synthetic camera frames
+        run: python3 test/decoder_check.py --n 60 --seed 1
+      - name: End-to-end chain through the embedded decoder
+        run: python3 test/chain_embedded.py
+      - name: End-to-end chain incl. upload server
+        run: python3 test/selftest.py
+      - name: Built single-file apps are up to date and self-contained
+        run: |
+          python3 build.py
+          git diff --exit-code -- dist/ || (echo "dist/ is stale: run python3 build.py and commit" && exit 1)
+          ! grep -E 'src="https?://|href="https?://[^"]+\.(css|js)"' dist/sender.html dist/receiver.html || (echo "external resource found in a dist page" && exit 1)

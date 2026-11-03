@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0e14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GlassWire">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>GlassWire Receiver — phone side</title>
+<style>
+  :root {
+    --bg: #0b0e14; --panel: #141923; --line: #232b3a; --fg: #e6e9ef; --muted: #8b94a7;
+    --accent: #ffb547; --ok: #3ddc84; --bad: #ff5d5d; --font: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 system-ui, sans-serif; }
+  body { padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+  header { display: flex; align-items: baseline; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0; font-size: 15px; letter-spacing: .04em; text-transform: uppercase; }
+  header .sub { color: var(--muted); font-family: var(--font); font-size: 11px; }
+  main { max-width: 640px; margin: 0 auto; padding: 14px 16px 40px; display: grid; gap: 14px; }
+  .cam { position: relative; background: #000; border-radius: 12px; overflow: hidden; aspect-ratio: 4 / 3; box-shadow: 0 0 0 1px var(--line); }
+  .cam video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .cam .reticle { position: absolute; inset: 12%; border: 2px solid rgba(255,181,71,.6); border-radius: 10px; pointer-events: none; }
+  .cam .reticle.hit { border-color: var(--ok); box-shadow: 0 0 0 4px rgba(61,220,132,.25); }
+  .cam .badge { position: absolute; left: 10px; top: 10px; font-family: var(--font); font-size: 11px; background: rgba(0,0,0,.6); padding: 3px 8px; border-radius: 999px; color: var(--muted); }
+  .cam .ctl { position: absolute; right: 10px; top: 10px; display: flex; gap: 6px; }
+  .cam .ctl button { padding: 6px 10px; font-size: 12px; }
+  .zoom { display: none; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); }
+  .zoom input { flex: 1; accent-color: var(--accent); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  .card h2 { margin: 0 0 10px; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .progress { height: 10px; background: var(--line); border-radius: 5px; overflow: hidden; }
+  .progress i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .15s; }
+  .progress.done i { background: var(--ok); }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-family: var(--font); font-size: 12px; margin-top: 10px; }
+  .kv span { color: var(--muted); }
+  .kv b { font-weight: 500; word-break: break-all; }
+  #grid { width: 100%; height: auto; image-rendering: pixelated; border-radius: 6px; margin-top: 10px; display: block; }
+  button { background: var(--accent); color: #1a1200; border: 0; border-radius: 8px; padding: 11px 14px; font: inherit; font-weight: 600; cursor: pointer; }
+  button.secondary { background: transparent; color: var(--fg); border: 1px solid var(--line); }
+  button.ok { background: var(--ok); color: #03200f; }
+  button:disabled { opacity: .4; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  input[type=text], input[type=url], input[type=password] { width: 100%; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font: inherit; }
+  .field { margin-bottom: 10px; }
+  .field label { display: block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+  .status { font-family: var(--font); font-size: 12px; color: var(--muted); white-space: pre-wrap; margin-top: 8px; min-height: 1.2em; }
+  .status.ok { color: var(--ok); } .status.bad { color: var(--bad); }
+  .hash.ok { color: var(--ok); } .hash.bad { color: var(--bad); }
+  .notice { font-size: 13px; color: var(--muted); }
+  .notice code { font-family: var(--font); }
+  .filebtn { display: inline-block; background: var(--accent); color: #1a1200; border-radius: 8px; padding: 11px 14px; font-weight: 600; cursor: pointer; }
+  .filebtn.secondary { background: transparent; color: var(--fg); border: 1px solid var(--line); }
+  .filebtn input { display: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>GlassWire <span style="opacity:.55;font-weight:400">Receiver</span></h1>
+  <span class="sub" id="decoderName">decoder: …</span>
+</header>
+<main>
+  <div class="cam">
+    <video id="video" playsinline muted autoplay></video>
+    <div class="reticle" id="reticle"></div>
+    <div class="badge" id="fpsBadge">camera off</div>
+    <div class="ctl">
+      <button id="torch" class="secondary" style="display:none">⚡ torch</button>
+      <button id="camBtn">Start camera</button>
+    </div>
+  </div>
+  <div class="zoom" id="zoomRow"><span>zoom</span><input type="range" id="zoom" min="1" max="1" step="0.1" value="1"><span id="zoomOut">1×</span></div>
+
+  <div class="card">
+    <h2>No live camera? Record, then pick the video</h2>
+    <div class="actions" style="margin-top:0">
+      <label class="filebtn"><input type="file" id="videoFile" accept="video/*" capture="environment">Record / pick a video</label>
+      <label class="filebtn secondary"><input type="file" id="photoFiles" accept="image/*" multiple>Pick photos</label>
+      <button id="stopFile" class="secondary" style="display:none">Stop</button>
+    </div>
+    <p class="notice">Film the sender screen for a full loop with the phone's normal camera app (or tap the button, which opens the camera on most phones), then pick the clip here. It is decoded on the phone, offline — no camera permission for this page and no network needed. Works when this page is opened as a plain local file.</p>
+  </div>
+
+  <div class="card">
+    <h2>Transfer</h2>
+    <div class="progress" id="prog"><i id="bar"></i></div>
+    <div class="kv">
+      <span>session</span><b id="kSid">—</b>
+      <span>chunks</span><b id="kChunks">0 / ?</b>
+      <span>missing</span><b id="kMissing">—</b>
+      <span>file</span><b id="kName">—</b>
+      <span>size</span><b id="kSize">—</b>
+      <span>expected sha-256</span><b id="kHash">—</b>
+      <span>received sha-256</span><b id="kGot" class="hash">—</b>
+      <span>decode rate</span><b id="kRate">—</b>
+    </div>
+    <canvas id="grid" width="64" height="1"></canvas>
+    <div class="actions">
+      <button id="share" class="ok" disabled>Share…</button>
+      <button id="download" disabled>Save to phone</button>
+      <button id="copy" class="secondary" disabled>Copy as text</button>
+      <button id="reset" class="secondary">Reset</button>
+    </div>
+    <div class="status" id="status">Point the camera at the sender screen. Order doesn't matter; missed frames come around again.</div>
+    <p class="notice" id="shareNote">When the file is complete, <b>Share…</b> opens the phone's share sheet (WhatsApp, Mail, Drive, Files, AirDrop…). <b>Save to phone</b> puts it in Downloads / Files.</p>
+  </div>
+
+  <details class="card">
+    <summary style="cursor:pointer;color:var(--muted);font-size:11px;letter-spacing:.1em;text-transform:uppercase">Optional: forward to an HTTP endpoint</summary>
+    <div style="margin-top:10px">
+    <div class="field"><label>Endpoint URL (POST)</label><input type="url" id="endpoint" placeholder="https://your-host/api/upload"></div>
+    <div class="field"><label>Bearer token (optional)</label><input type="password" id="token" placeholder="…"></div>
+    <div class="actions">
+      <button id="upload" disabled>Upload file</button>
+    </div>
+    <div class="status" id="upStatus"></div>
+    <p class="notice">Sends the raw bytes as the request body with <code>X-Filename</code> and <code>X-SHA256</code> headers. The bundled <code>server/receive_server.py</code> accepts exactly this and re-verifies the hash.</p>
+    </div>
+  </details>
+
+  <div class="actions" style="margin-top:0">
+    <button id="install" class="secondary" style="display:none">Install as app</button>
+  </div>
+  <p class="notice" id="installHint">Once opened over HTTPS, this page can be added to the home screen and then runs like an app, including with no connectivity.</p>
+</main>
+
+<script src="../shared/qrx-protocol.js"></script>
+<script src="qr-decoder.js"></script>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const video = $('video'), reticle = $('reticle');
+  const rx = QRX.createReceiver();
+  let stream = null, track = null, detector = null, decodeFn = null, running = false;
+  let result = null;             // { bytes, name, mime, sha256, verified }
+  let decodes = 0, lastRateT = performance.now(), lastDecodes = 0, wakeLock = null;
+  const work = document.createElement('canvas'), wctx = work.getContext('2d', { willReadFrequently: true });
+
+  $('endpoint').value = localStorage.getItem('qrx.endpoint') || '';
+  $('endpoint').addEventListener('change', () => localStorage.setItem('qrx.endpoint', $('endpoint').value));
+
+  // ---------- decoder selection: native BarcodeDetector when present, else the embedded decoder ----------
+  // Both run entirely on the phone. Nothing is ever fetched from the network.
+  let useNative = false;
+  function decodeCanvasSource(source, sw, sh) {
+    // Downscale to ≤ 800 px for the embedded decoder (plenty for v20 codes, keeps it fast).
+    const scale = Math.min(1, 800 / Math.max(sw, sh));
+    work.width = Math.round(sw * scale); work.height = Math.round(sh * scale);
+    wctx.drawImage(source, 0, 0, work.width, work.height);
+    const img = wctx.getImageData(0, 0, work.width, work.height);
+    const r = QRDecode.decodeImageData(img);
+    return r ? [r.text] : [];
+  }
+  async function pickDecoder() {
+    if ('BarcodeDetector' in window) {
+      try {
+        const fmts = await BarcodeDetector.getSupportedFormats();
+        if (fmts.includes('qr_code')) {
+          detector = new BarcodeDetector({ formats: ['qr_code'] });
+          useNative = true;
+        }
+      } catch (e) { useNative = false; }
+    }
+    decodeFn = async (source, sw, sh) => {
+      if (useNative) {
+        try { const codes = await detector.detect(source); return codes.map(c => c.rawValue); }
+        catch (e) { useNative = false; $('decoderName').textContent = 'decoder: embedded (native failed)'; }
+      }
+      return decodeCanvasSource(source, sw, sh);
+    };
+    $('decoderName').textContent = useNative ? 'decoder: native + embedded fallback' : 'decoder: embedded (no dependencies)';
+  }
+
+  // ---------- camera ----------
+  async function startCamera() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setStatus('Camera API unavailable. This page must be served over HTTPS (or localhost).', 'bad'); return;
+    }
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } }, audio: false,
+      });
+    } catch (e) { setStatus('Camera permission denied or unavailable: ' + e.message, 'bad'); return; }
+    video.srcObject = stream;
+    await video.play();
+    track = stream.getVideoTracks()[0];
+    const caps = track.getCapabilities ? track.getCapabilities() : {};
+    if (caps.torch) $('torch').style.display = '';
+    if (caps.zoom) {
+      const z = $('zoom'); z.min = caps.zoom.min; z.max = caps.zoom.max; z.step = caps.zoom.step || 0.1; z.value = track.getSettings().zoom || caps.zoom.min;
+      $('zoomRow').style.display = 'flex'; $('zoomOut').textContent = (+z.value).toFixed(1) + '×';
+    }
+    // Continuous focus helps a lot with a flickering screen.
+    if (caps.focusMode?.includes('continuous')) track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
+    try { wakeLock = await navigator.wakeLock?.request('screen'); } catch (e) {}
+    $('camBtn').textContent = 'Stop camera';
+    running = true;
+    loop();
+  }
+  function stopCamera() {
+    running = false;
+    stream?.getTracks().forEach(t => t.stop());
+    stream = track = null; video.srcObject = null;
+    $('camBtn').textContent = 'Start camera'; $('fpsBadge').textContent = 'camera off';
+    wakeLock?.release?.(); wakeLock = null;
+  }
+  $('camBtn').onclick = () => (running ? stopCamera() : startCamera());
+  $('torch').onclick = () => {
+    const on = $('torch').dataset.on === '1';
+    track?.applyConstraints({ advanced: [{ torch: !on }] }).then(() => { $('torch').dataset.on = on ? '0' : '1'; }).catch(() => {});
+  };
+  $('zoom').oninput = () => { track?.applyConstraints({ advanced: [{ zoom: +$('zoom').value }] }).catch(() => {}); $('zoomOut').textContent = (+$('zoom').value).toFixed(1) + '×'; };
+
+  // ---------- scan loop ----------
+  async function loop() {
+    let frames = 0, t0 = performance.now();
+    while (running) {
+      if (video.readyState >= 2) {
+        let values = [];
+        try { values = await decodeFn(video, video.videoWidth, video.videoHeight); } catch (e) { /* transient */ }
+        let hit = false;
+        for (const v of values) { if (handle(v)) hit = true; }
+        reticle.classList.toggle('hit', hit);
+        frames++;
+        const now = performance.now();
+        if (now - t0 > 1000) {
+          $('fpsBadge').textContent = (frames * 1000 / (now - t0)).toFixed(0) + ' scans/s';
+          frames = 0; t0 = now;
+        }
+      }
+      await new Promise(r => requestAnimationFrame(r));
+    }
+  }
+
+  function handle(text) {
+    const ev = rx.feed(text);
+    if (ev.kind === 'ignored') return false;
+    decodes++;
+    const st = rx.state;
+    if (ev.kind === 'header' || (st.header && ev.kind !== 'dup')) {
+      const h = st.header;
+      $('kName').textContent = h.name; $('kSize').textContent = fmtBytes(h.size);
+      $('kHash').textContent = h.sha256 || '(none)';
+    }
+    $('kSid').textContent = st.sid;
+    $('kChunks').textContent = st.received + ' / ' + (st.total || '?');
+    const missing = rx.missing();
+    $('kMissing').textContent = st.total ? (missing.length ? missing.length + (missing.length <= 12 ? '  [' + missing.join(' ') + ']' : '') : 'none') : '—';
+    $('bar').style.width = st.total ? (100 * st.received / st.total).toFixed(1) + '%' : '0%';
+    drawGrid();
+    if (ev.complete && !result) finish();
+    else if (result && ev.kind === 'header' && !result.verified) verify();
+    return true;
+  }
+
+  function drawGrid() {
+    const st = rx.state, g = $('grid'), n = st.total || 0;
+    if (!n) { g.height = 1; return; }
+    const cols = Math.min(64, n), rows = Math.ceil(n / cols);
+    g.width = cols; g.height = rows;
+    const ctx = g.getContext('2d');
+    ctx.fillStyle = '#232b3a'; ctx.fillRect(0, 0, cols, rows);
+    ctx.fillStyle = '#ffb547';
+    for (const i of st.chunks.keys()) ctx.fillRect(i % cols, Math.floor(i / cols), 1, 1);
+    g.style.height = (Math.min(rows * 6, 120)) + 'px';
+  }
+
+  async function finish() {
+    const bytes = rx.assemble();
+    const h = rx.state.header;
+    result = { bytes, name: h?.name || 'payload.bin', mime: h?.mime || 'application/octet-stream', sha256: null, verified: false };
+    $('prog').classList.add('done');
+    $('download').disabled = false; $('upload').disabled = false;
+    $('share').disabled = !canShareFiles();
+    if (!canShareFiles()) $('shareNote').textContent = 'This browser cannot share files directly — use Save to phone, then share it from your Files / Downloads app.';
+    $('copy').disabled = !(result.mime.startsWith('text/') && bytes.length < 200000);
+    navigator.vibrate?.([60, 40, 60]);
+    await verify();
+  }
+  async function verify() {
+    const h = rx.state.header;
+    result.sha256 = result.sha256 || await QRX.sha256Hex(result.bytes);
+    $('kGot').textContent = result.sha256;
+    if (!h) { setStatus('All chunks received — waiting for the header frame to verify the hash.', ''); return; }
+    result.name = h.name; result.mime = h.mime;
+    if (h.sha256 && h.sha256 !== result.sha256) {
+      $('kGot').className = 'hash bad';
+      setStatus('Hash MISMATCH — transfer corrupted. Press Reset and scan again.', 'bad');
+      return;
+    }
+    result.verified = true; $('kGot').className = 'hash ok';
+    setStatus('Complete and verified: ' + result.name + ' (' + fmtBytes(result.bytes.length) + '). Tap Share… to send it on, or Save to phone.', 'ok');
+    if (running) stopCamera();
+  }
+
+  function canShareFiles() {
+    try {
+      return !!navigator.share && !!navigator.canShare &&
+        navigator.canShare({ files: [new File([new Uint8Array(1)], 'x.bin', { type: 'application/octet-stream' })] });
+    } catch (e) { return false; }
+  }
+  $('share').onclick = async () => {
+    // Must run synchronously inside the tap handler for the share sheet to open.
+    const file = new File([result.bytes], result.name, { type: result.mime });
+    try {
+      await navigator.share({ files: [file], title: result.name, text: 'Received over GlassWire (' + fmtBytes(result.bytes.length) + ', sha256 ' + (result.sha256 || '').slice(0, 12) + '…)' });
+      setStatus('Shared ' + result.name + '.', 'ok');
+    } catch (e) {
+      if (e.name !== 'AbortError') setStatus('Share failed: ' + e.message + ' — use Save to phone instead.', 'bad');
+    }
+  };
+  $('download').onclick = () => {
+    const url = URL.createObjectURL(new Blob([result.bytes], { type: result.mime }));
+    const a = Object.assign(document.createElement('a'), { href: url, download: result.name });
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
+    setStatus('Saved ' + result.name + ' — look in Downloads / Files.', 'ok');
+  };
+  $('copy').onclick = async () => {
+    await navigator.clipboard.writeText(new TextDecoder().decode(result.bytes));
+    setStatus('Copied ' + fmtBytes(result.bytes.length) + ' of text to clipboard.', 'ok');
+  };
+  $('reset').onclick = () => {
+    rx.reset(); result = null; decodes = 0;
+    $('prog').classList.remove('done'); $('bar').style.width = '0';
+    ['kSid', 'kName', 'kSize', 'kHash', 'kGot', 'kMissing'].forEach(id => $(id).textContent = '—');
+    $('kGot').className = 'hash'; $('kChunks').textContent = '0 / ?'; $('grid').height = 1;
+    $('download').disabled = $('upload').disabled = $('copy').disabled = $('share').disabled = true;
+    setStatus('Reset. Scanning…', ''); $('upStatus').textContent = '';
+  };
+
+  // ---------- upload ----------
+  $('upload').onclick = async () => {
+    const url = $('endpoint').value.trim();
+    if (!url) { setUp('Enter an endpoint URL first.', 'bad'); return; }
+    localStorage.setItem('qrx.endpoint', url);
+    setUp('Uploading ' + fmtBytes(result.bytes.length) + '…', '');
+    const headers = { 'Content-Type': result.mime, 'X-Filename': encodeURIComponent(result.name), 'X-SHA256': result.sha256 || '' };
+    if ($('token').value) headers['Authorization'] = 'Bearer ' + $('token').value;
+    try {
+      const r = await fetch(url, { method: 'POST', headers, body: result.bytes });
+      const txt = await r.text();
+      setUp((r.ok ? 'OK ' : 'HTTP ') + r.status + '\n' + txt.slice(0, 600), r.ok ? 'ok' : 'bad');
+    } catch (e) { setUp('Upload failed: ' + e.message + '\n(mixed content? CORS? self-signed cert not yet trusted?)', 'bad'); }
+  };
+
+  // ---------- offline sources: a recorded clip or photos, decoded frame by frame ----------
+  let fileRun = 0;
+  $('videoFile').addEventListener('change', async () => {
+    const f = $('videoFile').files[0]; if (!f) return;
+    if (running) stopCamera();
+    const run = ++fileRun;
+    const v = document.createElement('video');
+    v.muted = true; v.playsInline = true; v.src = URL.createObjectURL(f);
+    $('stopFile').style.display = ''; $('stopFile').onclick = () => { fileRun++; v.pause(); };
+    setStatus('Decoding ' + f.name + '…', '');
+    await new Promise((res, rej) => { v.onloadedmetadata = res; v.onerror = () => rej(new Error('cannot play this video')); }).catch(e => setStatus(e.message, 'bad'));
+    // Mirror the clip in the preview area so the person sees what is being read.
+    video.srcObject = null; video.src = v.src; video.muted = true; video.play().catch(() => {});
+    let frames = 0, hits = 0;
+    try { await v.play(); } catch (e) { setStatus('Playback blocked: ' + e.message, 'bad'); return; }
+    while (run === fileRun && !v.ended && !result) {
+      if (v.readyState >= 2) {
+        let values = [];
+        try { values = await decodeFn(v, v.videoWidth, v.videoHeight); } catch (e) {}
+        for (const t of values) if (handle(t)) hits++;
+        frames++;
+        if (frames % 10 === 0) $('fpsBadge').textContent = Math.round(v.currentTime) + 's / ' + Math.round(v.duration || 0) + 's · ' + hits + ' frames read';
+      }
+      await new Promise(r => (v.requestVideoFrameCallback ? v.requestVideoFrameCallback(r) : requestAnimationFrame(r)));
+    }
+    v.pause(); video.pause(); video.removeAttribute('src'); video.load();
+    $('stopFile').style.display = 'none'; $('fpsBadge').textContent = 'clip done · ' + hits + ' frames read';
+    if (!result && run === fileRun) setStatus('Clip finished with ' + rx.missing().length + ' chunks still missing — record a longer clip (one full loop) and pick it again; progress is kept.', 'bad');
+    $('videoFile').value = '';
+  });
+  $('photoFiles').addEventListener('change', async () => {
+    const files = Array.from($('photoFiles').files); if (!files.length) return;
+    let hits = 0;
+    for (const f of files) {
+      const bmp = await createImageBitmap(f).catch(() => null); if (!bmp) continue;
+      let values = [];
+      try { values = await decodeFn(bmp, bmp.width, bmp.height); } catch (e) {}
+      for (const t of values) if (handle(t)) hits++;
+      bmp.close && bmp.close();
+    }
+    setStatus(hits + ' QRX frames read from ' + files.length + ' photo(s).', hits ? '' : 'bad');
+    $('photoFiles').value = '';
+  });
+
+  // ---------- misc ----------
+  setInterval(() => {
+    const now = performance.now(), d = decodes - lastDecodes;
+    $('kRate').textContent = (d * 1000 / (now - lastRateT)).toFixed(1) + ' frames/s decoded';
+    lastRateT = now; lastDecodes = decodes;
+  }, 2000);
+  function setStatus(m, cls) { $('status').textContent = m; $('status').className = 'status ' + (cls || ''); }
+  function setUp(m, cls) { $('upStatus').textContent = m; $('upStatus').className = 'status ' + (cls || ''); }
+  function fmtBytes(n) { return n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : (n / 1048576).toFixed(2) + ' MB'; }
+
+  pickDecoder().catch(e => setStatus(e.message, 'bad'));
+  if (!window.isSecureContext && !navigator.mediaDevices) setStatus('Live camera is unavailable on this page origin (not HTTPS). Use "Record / pick a video" below — it works fully offline.', '');
+
+  // ---------- installable app: register the service worker, offer "Add to home screen" ----------
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+  let installPrompt = null;
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault(); installPrompt = e;
+    const b = $('install'); b.style.display = ''; b.onclick = async () => { installPrompt.prompt(); await installPrompt.userChoice; b.style.display = 'none'; };
+  });
+  if (/iPhone|iPad/.test(navigator.userAgent) && !navigator.standalone) {
+    $('installHint').textContent = 'Install: tap Share ▢↑ in Safari, then "Add to Home Screen". The app then opens full-screen and works without connectivity.';
+  }
+})();
+</script>
+</body>
+</html>

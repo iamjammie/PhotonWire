@@ -1,0 +1,22 @@
+# Build output that is regenerated from source (python3 build.py)
+# Note: dist/sender.html and dist/receiver.html ARE committed so users can download and run
+# them directly, like FluxHunt.html. dist/app/ is the hosted PWA build and is committed too.
+
+# Packaged deliverables
+*.zip
+
+# Runtime output of the optional server (uploads are case data — keep them out of the repo)
+/uploads/
+/server/certs/
+
+# Test scratch
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Editor / OS cruft
+.DS_Store
+*.swp
+.idea/
+.vscode/
+node_modules/
