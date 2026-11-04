@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-qr_send.py — pure-Python GlassWire sender for air-gapped hosts with no browser (servers, SSH consoles).
+qr_send.py — pure-Python Photonwire sender for air-gapped hosts with no browser (servers, SSH consoles).
 Standard library only. Python 3.8+.
 
 Modes
@@ -352,7 +352,7 @@ def to_pbm(mod, scale=8, quiet=4):
     return ''.join(out)
 
 
-HTML_PLAYER = """<!doctype html><html><head><meta charset="utf-8"><title>GlassWire player — {name}</title>
+HTML_PLAYER = """<!doctype html><html><head><meta charset="utf-8"><title>Photonwire player — {name}</title>
 <style>body{{margin:0;background:#0b0e14;color:#8b94a7;font:13px ui-monospace,monospace;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:12px}}
 canvas{{background:#fff;border-radius:8px;width:min(80vh,92vw);height:auto;image-rendering:pixelated}}b{{color:#e6e9ef}}</style></head><body>
 <canvas id="c"></canvas><div>frame <b id="f">–</b> · loop <b id="l">0</b> · {name} · {size} B · {total} chunks · sha256 {sha}… · <b>space</b> pause, <b>←/→</b> step</div>
@@ -429,7 +429,7 @@ def main():
             for n, i in enumerate(seq):
                 lines = rendered[0 if i < 0 else i + 1]
                 label = 'HDR' if i < 0 else f'{i + 1}/{total}'
-                out.write('\x1b[H\x1b[2J' + '\n'.join(lines) + f'\n GlassWire {sid}  frame {label}  loop {loop}  {len(seq)} frames/loop  ^C to stop\n')
+                out.write('\x1b[H\x1b[2J' + '\n'.join(lines) + f'\n Photonwire {sid}  frame {label}  loop {loop}  {len(seq)} frames/loop  ^C to stop\n')
                 out.flush()
                 time.sleep(1 / a.fps)
             loop += 1

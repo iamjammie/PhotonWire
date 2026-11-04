@@ -1,4 +1,4 @@
-# GlassWire — User Guide
+# Photonwire — User Guide
 
 A step-by-step guide to moving a file from an air-gapped screen to a phone. For the frame format
 see [PROTOCOL.md](PROTOCOL.md); for how it is built see [ARCHITECTURE.md](ARCHITECTURE.md).

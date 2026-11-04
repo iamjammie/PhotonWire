@@ -1,6 +1,6 @@
-# GlassWire — Architecture
+# Photonwire — Architecture
 
-How GlassWire is built, how data flows through it, and how to extend it. Aimed at contributors.
+How Photonwire is built, how data flows through it, and how to extend it. Aimed at contributors.
 
 ---
 

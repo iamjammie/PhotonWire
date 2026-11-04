@@ -1,6 +1,6 @@
-# QRX/1 — the GlassWire frame protocol
+# QRX/1 — the Photonwire frame protocol
 
-QRX/1 is the format GlassWire puts inside each QR code. It is deliberately simple and text-based so
+QRX/1 is the format Photonwire puts inside each QR code. It is deliberately simple and text-based so
 that a frame can be read by any QR scanner, inspected by eye, and re-implemented in a few dozen
 lines. This document is the normative description; `shared/qrx-protocol.js` and
 `sender/qr_send.py` are the reference implementations and must agree byte for byte.

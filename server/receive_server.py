@@ -123,7 +123,7 @@ def ensure_cert(cert_dir):
     if not (os.path.exists(crt) and os.path.exists(key)):
         print('[tls] generating self-signed certificate with openssl …')
         subprocess.check_call(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '365',
-                               '-keyout', key, '-out', crt, '-subj', '/CN=glasswire-receiver',
+                               '-keyout', key, '-out', crt, '-subj', '/CN=photonwire-receiver',
                                '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1'])
     return crt, key
 
@@ -159,7 +159,7 @@ def main():
         ctx.load_cert_chain(crt, key)
         httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True)
         scheme = 'https'
-    print(f'GlassWire receive server on {scheme}://{a.host}:{port}')
+    print(f'Photonwire receive server on {scheme}://{a.host}:{port}')
     for ip in lan_ips():
         print(f'  open on the phone:  {scheme}://{ip}:{port}/')
         print(f'  upload endpoint:    {scheme}://{ip}:{port}/api/upload')

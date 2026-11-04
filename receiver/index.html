@@ -6,10 +6,10 @@
 <meta name="theme-color" content="#0b0e14">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="GlassWire">
+<meta name="apple-mobile-web-app-title" content="Photonwire">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
-<title>GlassWire Receiver — phone side</title>
+<title>Photonwire Receiver — phone side</title>
 <style>
   :root {
     --bg: #0b0e14; --panel: #141923; --line: #232b3a; --fg: #e6e9ef; --muted: #8b94a7;
@@ -60,7 +60,7 @@
 </head>
 <body>
 <header>
-  <h1>GlassWire <span style="opacity:.55;font-weight:400">Receiver</span></h1>
+  <h1>Photonwire <span style="opacity:.55;font-weight:400">Receiver</span></h1>
   <span class="sub" id="decoderName">decoder: …</span>
 </header>
 <main>
@@ -307,7 +307,7 @@
     // Must run synchronously inside the tap handler for the share sheet to open.
     const file = new File([result.bytes], result.name, { type: result.mime });
     try {
-      await navigator.share({ files: [file], title: result.name, text: 'Received over GlassWire (' + fmtBytes(result.bytes.length) + ', sha256 ' + (result.sha256 || '').slice(0, 12) + '…)' });
+      await navigator.share({ files: [file], title: result.name, text: 'Received over Photonwire (' + fmtBytes(result.bytes.length) + ', sha256 ' + (result.sha256 || '').slice(0, 12) + '…)' });
       setStatus('Shared ' + result.name + '.', 'ok');
     } catch (e) {
       if (e.name !== 'AbortError') setStatus('Share failed: ' + e.message + ' — use Save to phone instead.', 'bad');

@@ -1,6 +1,6 @@
 <div align="center">
 
-# GlassWire
+# Photonwire
 
 **Offline file transfer across an air gap — by screen and camera.**
 
@@ -16,7 +16,7 @@ The isolated machine shows the file as a loop of QR codes; a phone reads it back
 
 Air-gapped and isolated systems are built so that nothing gets in. The price is that nothing
 easily gets *out* either — a log export, a config dump, a scan result, a triage report — when
-there is no network, no approved USB route and no cable. GlassWire is a one-way optical channel for
+there is no network, no approved USB route and no cable. Photonwire is a one-way optical channel for
 exactly that: the file is chunked, each chunk becomes a QR code, the codes animate in a loop on
 the isolated screen, and a phone pointed at the screen reassembles the file, checks its hash, and
 saves or shares it.
@@ -25,7 +25,7 @@ Both ends are **single, self-contained HTML files**. `sender.html` carries its o
 `receiver.html` carries its own QR decoder, so neither page loads anything from anywhere. Nothing
 crosses the gap but light, and nothing flows back into the isolated machine.
 
-> GlassWire is a **defensive, one-way data channel** for operators who must move small files out of
+> Photonwire is a **defensive, one-way data channel** for operators who must move small files out of
 > environments they are authorised to work in. It cannot inject anything into an isolated system,
 > and it makes no attempt to hide: the transfer is visible on a screen the whole time.
 
@@ -81,7 +81,7 @@ See the [**User Guide**](docs/USER_GUIDE.md) for tuning, platform notes and trou
 |---|---|
 | [README.md](README.md) | This overview and entry point. |
 | [USER_GUIDE.md](docs/USER_GUIDE.md) | Step-by-step guide to both ends, every setting, hosting options and troubleshooting. |
-| [PROTOCOL.md](docs/PROTOCOL.md) | The QRX/1 frame format (the wire format GlassWire carries), so other senders and receivers can interoperate. |
+| [PROTOCOL.md](docs/PROTOCOL.md) | The QRX/1 frame format (the wire format Photonwire carries), so other senders and receivers can interoperate. |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | How the encoder, decoder and apps are built, the build step, and how to extend them. |
 | [CHANGELOG.md](docs/CHANGELOG.md) | Version history. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Golden rules, layout, tests. |
@@ -108,7 +108,7 @@ Per loop; frames the camera misses are picked up on the next pass. Compress firs
 - **One-way and optical.** The phone cannot ask for a retransmission; it waits for the loop. That
   is also the security property: nothing reaches the isolated host.
 - **Anyone who can see the screen can read the data.** The channel is not confidential. Encrypt
-  before sending if the content is sensitive (`gpg -c file` on the isolated side; GlassWire forwards
+  before sending if the content is sensitive (`gpg -c file` on the isolated side; Photonwire forwards
   opaque bytes unchanged).
 - **Integrity, not authenticity.** The SHA-256 proves the phone got exactly what the screen
   showed. Sign the file, or use a MAC with a pre-shared key, if you must prove who sent it.
@@ -121,7 +121,7 @@ Per loop; frames the camera misses are picked up on the next pass. Compress firs
 
 ## Responsible use
 
-An optical channel bypasses network controls by design. GlassWire is for operators, responders and
+An optical channel bypasses network controls by design. Photonwire is for operators, responders and
 administrators who are **authorised** to move data out of an isolated environment and whose
 data-handling policy permits it. Do not use it to circumvent controls you do not own. The
 transfer is deliberately conspicuous — a screen full of flashing codes — and leaves the isolated

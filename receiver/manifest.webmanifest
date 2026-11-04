@@ -1,6 +1,6 @@
 {
-  "name": "GlassWire Receiver",
-  "short_name": "GlassWire",
+  "name": "Photonwire Receiver",
+  "short_name": "Photonwire",
   "description": "Receive files from an air-gapped screen by scanning looping QR codes, then share them from your phone.",
   "start_url": "./index.html",
   "scope": "./",

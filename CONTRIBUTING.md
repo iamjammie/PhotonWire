@@ -1,4 +1,4 @@
-# Contributing to GlassWire
+# Contributing to Photonwire
 
 Thanks for your interest in improving QRX. It is a two-file, fully offline optical file
 transfer, and a few constraints keep it that way — please read these before opening a PR.

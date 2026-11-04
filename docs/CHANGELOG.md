@@ -1,4 +1,4 @@
-# GlassWire — Changelog
+# Photonwire — Changelog
 
 All notable changes to QRX. The project is a two-file, fully offline optical file transfer;
 versions track the sender, receiver and QRX protocol together.

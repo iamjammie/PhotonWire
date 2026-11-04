@@ -1,6 +1,6 @@
-// GlassWire Receiver service worker: cache the app shell so the installed app opens and scans
+// Photonwire Receiver service worker: cache the app shell so the installed app opens and scans
 // with no connectivity at all (the phone only needs internet when it forwards the file).
-const CACHE = 'glasswire-receiver-v1';
+const CACHE = 'photonwire-receiver-v1';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png',
   './index.html'];
 
